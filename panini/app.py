@@ -39,6 +39,7 @@ class App:
             logger_in_separate_process: bool = False,
             custom_logger: logging.Logger = None,
             pending_bytes_limit=65536 * 1024 * 10,
+            ignore_tasks_exceptions: bool = True,
             **kwargs
     ):
         """
@@ -89,6 +90,8 @@ class App:
             self.logger_required = logger_required
             self.logger_in_separate_process = logger_in_separate_process
 
+            self._ignore_tasks_exceptions = ignore_tasks_exceptions
+
             # check, if TestClient is running
             if os.environ.get("PANINI_TEST_MODE"):
                 self.logger_files_path = os.environ.get(
@@ -132,7 +135,7 @@ class App:
             error = f"App.event_registrar critical error: {str(e)}"
             raise InitializingEventManagerError(error)
 
-    def setup_web_server(self, host=None, port=None, web_app=None, params: dict = None):
+    def setup_web_server(self, host=None, port=None, web_app=None, params: dict = None, middlewares: list = None):
         """
         Setup server and run with NATS when called app.start()
         """
@@ -145,7 +148,8 @@ class App:
                 routes=self.http,
                 loop=self.loop,
                 web_app=web_app,
-                web_server_params=params
+                web_server_params=params,
+                middlewares=middlewares
             )
         else:
             self.http_server = HTTPServer(
@@ -153,7 +157,8 @@ class App:
                 loop=self.loop,
                 host=host,
                 port=port,
-                web_server_params=params
+                web_server_params=params,
+                middlewares=middlewares
             )
 
     def add_filters(self, include: list = None, exclude: list = None):
@@ -452,7 +457,7 @@ class App:
         if self.http_server:
             self.http_server.start_server()
         else:
-            loop.run_until_complete(asyncio.gather(*tasks))
+            loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=self._ignore_tasks_exceptions))
 
 
 
